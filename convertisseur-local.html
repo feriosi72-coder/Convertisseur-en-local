@@ -811,7 +811,7 @@
                 
                 // Extract text from DOCX using mammoth.js
                 const result = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
-                const text = result.value;
+                let text = result.value;
                 const messages = result.messages;
                 
                 if (messages && messages.length > 0) {
@@ -822,7 +822,7 @@
                 const { PDFDocument, StandardFonts, rgb } = PDFLib;
                 
                 const pdfDoc = await PDFDocument.create();
-                const pages = pdfDoc.addPage([595.28, 841.89]); // A4 size
+                let page = pdfDoc.addPage([595.28, 841.89]); // A4 size
                 const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
                 
                 // Text formatting
@@ -830,54 +830,71 @@
                 const lineHeight = 15;
                 const maxWidth = 540;
                 const marginLeft = 50;
-                const marginTop = 750;
+                let yPosition = 750;
                 
-                // Split text into lines that fit the page
-                const words = text.split(' ');
-                let currentLine = '';
-                let yPosition = marginTop;
+                // Clean text: remove characters that WinAnsi encoding cannot handle
+                // Replace problematic characters with safe equivalents
+                text = text
+                    .replace(/\r\n/g, '\n')  // Normalize line endings
+                    .replace(/\r/g, '\n')    // Remove carriage returns
+                    .replace(/[^\x20-\x7E\n]/g, ''); // Remove non-ASCII characters except newline
                 
-                for (const word of words) {
-                    const testLine = currentLine + word + ' ';
-                    const testWidth = font.widthOfTextAtSize(testLine, fontSize);
+                // Split text into lines (preserve paragraph breaks)
+                const paragraphs = text.split('\n');
+                
+                for (const paragraph of paragraphs) {
+                    // Handle word wrapping within each paragraph
+                    const words = paragraph.split(' ');
+                    let currentLine = '';
                     
-                    if (testWidth > maxWidth) {
-                        // Draw current line
+                    for (const word of words) {
+                        if (word === '') continue; // Skip empty words
+                        
+                        const testLine = currentLine + word + ' ';
+                        const testWidth = font.widthOfTextAtSize(testLine, fontSize);
+                        
+                        if (testWidth > maxWidth && currentLine.trim() !== '') {
+                            // Check if we need a new page
+                            if (yPosition < 50) {
+                                page = pdfDoc.addPage([595.28, 841.89]);
+                                yPosition = 750;
+                            }
+                            
+                            // Draw current line
+                            page.drawText(currentLine.trim(), {
+                                x: marginLeft,
+                                y: yPosition,
+                                size: fontSize,
+                                font: font,
+                                color: rgb(0, 0, 0)
+                            });
+                            
+                            currentLine = word + ' ';
+                            yPosition -= lineHeight;
+                        } else {
+                            currentLine = testLine;
+                        }
+                    }
+                    
+                    // Draw remaining words in paragraph
+                    if (currentLine.trim()) {
                         if (yPosition < 50) {
-                            // Add new page
-                            const newPage = pdfDoc.addPage([595.28, 841.89]);
-                            yPosition = marginTop;
+                            page = pdfDoc.addPage([595.28, 841.89]);
+                            yPosition = 750;
                         }
                         
-                        pages.drawText(currentLine.trim(), {
+                        page.drawText(currentLine.trim(), {
                             x: marginLeft,
                             y: yPosition,
                             size: fontSize,
                             font: font,
                             color: rgb(0, 0, 0)
                         });
-                        
-                        currentLine = word + ' ';
                         yPosition -= lineHeight;
-                    } else {
-                        currentLine = testLine;
-                    }
-                }
-                
-                // Draw last line
-                if (currentLine.trim()) {
-                    if (yPosition < 50) {
-                        const newPage = pdfDoc.addPage([595.28, 841.89]);
-                        yPosition = marginTop;
                     }
                     
-                    pages.drawText(currentLine.trim(), {
-                        x: marginLeft,
-                        y: yPosition,
-                        size: fontSize,
-                        font: font,
-                        color: rgb(0, 0, 0)
-                    });
+                    // Extra space between paragraphs
+                    yPosition -= 5;
                 }
                 
                 // Serialize the PDFDocument to bytes (a Uint8Array)
