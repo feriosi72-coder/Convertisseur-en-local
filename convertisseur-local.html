@@ -778,25 +778,51 @@
                 const canvas = document.createElement('canvas');
                 const ctx = canvas.getContext('2d');
                 
+                // Support pour les images avec transparence (conversion vers JPG)
                 img.onload = () => {
                     canvas.width = img.width;
                     canvas.height = img.height;
+                    
+                    // Ajouter un fond blanc pour les conversions vers JPG (gère la transparence)
+                    if (targetFormat === 'jpg' || targetFormat === 'jpeg') {
+                        ctx.fillStyle = '#FFFFFF';
+                        ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    }
+                    
                     ctx.drawImage(img, 0, 0);
                     
+                    // Déterminer le MIME type correct
                     let mimeType = 'image/' + targetFormat;
-                    if (targetFormat === 'jpg') mimeType = 'image/jpeg';
-                    if (targetFormat === 'tif') mimeType = 'image/tiff';
+                    if (targetFormat === 'jpg' || targetFormat === 'jpeg') {
+                        mimeType = 'image/jpeg';
+                    } else if (targetFormat === 'png') {
+                        mimeType = 'image/png';
+                    } else if (targetFormat === 'webp') {
+                        mimeType = 'image/webp';
+                    } else if (targetFormat === 'gif') {
+                        mimeType = 'image/gif';
+                    } else if (targetFormat === 'avif') {
+                        mimeType = 'image/avif';
+                    }
+                    
+                    // Vérifier si le format est supporté par le navigateur
+                    const supportedFormats = ['image/jpeg', 'image/png', 'image/webp'];
+                    if (!supportedFormats.includes(mimeType)) {
+                        // Fallback vers PNG pour les formats non supportés (TIFF, BMP, etc.)
+                        console.warn(`Format ${mimeType} non supporté, fallback vers PNG`);
+                        mimeType = 'image/png';
+                    }
                     
                     canvas.toBlob((blob) => {
                         if (blob) {
                             resolve(blob);
                         } else {
-                            reject(new Error('Conversion failed'));
+                            reject(new Error('Échec de la conversion - format non supporté par le navigateur'));
                         }
                     }, mimeType, 0.92);
                 };
                 
-                img.onerror = () => reject(new Error('Failed to load image'));
+                img.onerror = () => reject(new Error('Impossible de charger l\'image. Le fichier est peut-être corrompu.'));
                 img.src = URL.createObjectURL(file);
             });
         }
