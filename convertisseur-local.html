@@ -1199,8 +1199,8 @@
                 
                 let resultBlob;
                 
-                // Image conversion
-                if (supportedFormats.image.includes(sourceExt)) {
+                // Image conversion (detection par MIME type pour plus de fiabilité)
+                if (state.file.type.startsWith('image/') || supportedFormats.image.includes(sourceExt)) {
                     updateProgress(30, 'Conversion de l\'image...');
                     resultBlob = await convertImage(state.file, targetExt);
                 }
